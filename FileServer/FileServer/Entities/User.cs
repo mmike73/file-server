@@ -10,7 +10,10 @@ public class User
 
     public DateTime Created { get; set; }
 
-    public string? Role { get; set; }
+    public string? Role { get; set; } = "";
+    
+    public string? RefreshToken {  get; set; }
+    public DateTime? RefreshTokenExpiryTime { get; set; }
 
     public ICollection<FileEntry> Files { get; set; } = new List<FileEntry>();
 }
