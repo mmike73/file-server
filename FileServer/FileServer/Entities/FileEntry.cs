@@ -9,7 +9,10 @@ public class FileEntry
     public string StoredName { get; set; }
 
     public string Path { get; set; } = null!;
-    
+
+    public string HttpUrl { get; set; } = "";
+
+    public string Extension { get; set; } = "";
     public long Size { get; set; }
     
     public DateTime DateTimeAdded { get; set; }

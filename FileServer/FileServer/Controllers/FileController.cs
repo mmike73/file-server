@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using FileServer.Entities;
+using FileServer.Entities.Dtos;
 using FileServer.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,60 +29,70 @@ public class FileEntryController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetAllPrivate()
     {
-        // TODO - umpack the token and determine the user
-        var files = await _fileService.GetAllUsersPriateFilesAsync();
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var files = await _fileService.GetAllUsersPriateFilesAsync(userId);
         return Ok(files);
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var file = await _fileService.GetByIdAsync(id);
-        if (file == null) return NotFound();
-        return Ok(file);
+        var isAuthenticated = User.Identity?.IsAuthenticated;
+        if (isAuthenticated is not null && isAuthenticated == false)
+        {
+            var publicFile = await _fileService.GetPublicByIdAsync(id);
+            if (publicFile == null) return NotFound();
+            return Ok(publicFile);
+        }
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var privateFile = await _fileService.GetPrivateByIdAsync(id, userId);
+        if (privateFile == null) return NotFound();
+        return Ok(privateFile);
     }
 
     [HttpPost]
     [Authorize]
-    public async Task<IActionResult> Create([FromBody] FileEntry fileEntry)
+    public async Task<IActionResult> Upload([FromForm] FileUploadDto request)
     {
-        var created = await _fileService.CreateAsync(fileEntry);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var fileEntry = await _fileService.CreateAsync(request, userId);
+        return Ok(fileEntry);
     }
     
     [HttpDelete("{id}")]
     [Authorize]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var deleted = await _fileService.DeleteAsync(id);
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var deleted = await _fileService.DeleteAsync(id, userId);
         if (!deleted) return NotFound();
         return NoContent();
     }
+    
+    [HttpGet("{id}/download")]
+    public async Task<IActionResult> Download(Guid id)
+    { var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
 
-    [HttpGet("access/{id}")]
-    public async Task<IActionResult> AccessFile(Guid id)
-    {
-        var file = await _fileService.GetByIdAsync(id);
-        if (file == null) return NotFound();
-
-        if (file.Visibility == FileVisibility.Private)
+        FileEntry? file;
+        if (!isAuthenticated)
         {
-            // TODO - require token
-            if (!User.Identity?.IsAuthenticated ?? true)
-                return Unauthorized("This file is private. You need to log in.");
-
-            // TODO - check permissions
+            file = await _fileService.GetPublicByIdAsync(id);
+            if (file == null)
+                return Unauthorized("This file is private. Please log in to access it.");
+        }
+        else
+        {
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            file = await _fileService.GetPrivateByIdAsync(id, userId);
+            if (file == null)
+                return NotFound("File not found or access denied.");
         }
 
-        return Ok(new
-        {
-            file.Id,
-            file.OriginalName,
-            file.StoredName,
-            file.Path,
-            file.ContentType,
-            file.Size,
-            file.Visibility
-        });
+        var fileStream = await _fileService.DownloadFileAsync(file);
+        if (fileStream == null)
+            return NotFound("File not found on WebDAV server.");
+
+        return File(fileStream, file.ContentType ?? "application/octet-stream", file.OriginalName);
     }
+
 }
