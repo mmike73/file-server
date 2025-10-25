@@ -34,7 +34,7 @@ public class FileEntryService(AppDbContext context, IWebDavClient webDavClient) 
         return null;
     }
 
-    public async Task<FileEntry?> GetPrivateByIdAsync(Guid id, Guid userId)
+    public async Task<FileEntry?> GetPrivateByIdAsync(Guid id, Guid? userId)
     {
         var file = await context.FileEntries.FirstOrDefaultAsync(f => f.Id == id);
         
@@ -78,36 +78,64 @@ public class FileEntryService(AppDbContext context, IWebDavClient webDavClient) 
         return fileEntry;
     }
 
-    public async Task<bool> DeleteAsync(Guid id, Guid userId)
+    // public async Task<bool> DeleteAsync(Guid id, Guid userId)
+    // {
+    //     var file = await context.FileEntries.FindAsync(id);
+    //     // TODO - throw apropriate errors
+    //     if (file == null)
+    //     {
+    //         return false;
+    //     }
+    //
+    //     if (!file.AddedBy.Equals(userId))
+    //     {
+    //         return false;
+    //     }
+    //     
+    //     var propfindResult = await webDavClient.Propfind(file.Path);
+    //     if (!propfindResult.IsSuccessful)
+    //     {
+    //         return false;
+    //     }
+    //     
+    //     var deleteResult = await webDavClient.Delete(file.Path);
+    //     if (!deleteResult.IsSuccessful)
+    //         throw new Exception($"WebDAV delete failed: {deleteResult.StatusCode}");
+    //     
+    //     context.FileEntries.Remove(file);
+    //     await context.SaveChangesAsync();
+    //     return true;    
+    // }
+    public async Task<FileEntry> DeleteAsync(Guid id, Guid userId)
     {
         var file = await context.FileEntries.FindAsync(id);
-        // TODO - throw apropriate errors
         if (file == null)
-        {
-            return false;
-        }
+            throw new KeyNotFoundException($"File with ID {id} not found.");
 
-        if (!file.AddedBy.Equals(userId))
-        {
-            return false;
-        }
-        
-        var propfindResult = await webDavClient.Propfind(file.Path);
-        if (!propfindResult.IsSuccessful)
-        {
-            context.FileEntries.Remove(file);
-            await context.SaveChangesAsync();
-            return true;
-        }
-        
-        var deleteResult = await webDavClient.Delete(file.Path);
+        if (file.AddedBy != userId)
+            throw new UnauthorizedAccessException("You are not authorized to delete this file.");
+
+        // Optionally: verify existence with PROPFIND
+        var deleteResult = await webDavClient.Delete("/webdav/" + file.Path);
         if (!deleteResult.IsSuccessful)
-            throw new Exception($"WebDAV delete failed: {deleteResult.StatusCode}");
-        
+            throw new InvalidOperationException($"WebDAV delete failed with status {deleteResult.StatusCode}.");
+
         context.FileEntries.Remove(file);
-        await context.SaveChangesAsync();
-        return true;    
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // Optional rollback or retry mechanism
+            // Log the issue for diagnostics
+            throw new Exception("Database update failed after WebDAV delete.", ex);
+        }
+        
+        return file;
     }
+
 
     public async Task<bool> IsFilePublicAsync(Guid id)
     {
