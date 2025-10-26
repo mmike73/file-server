@@ -130,6 +130,9 @@ desktop.ini
 Migrations/*.Designer.cs
 
 # Include if you want to ignore secrets/configs
+appsettings.json
+appsettings.*.json
+
 appsettings.Development.json
 appsettings.Local.json
 

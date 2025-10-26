@@ -21,7 +21,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowReactApp",
         policy =>
         {
-            policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod();
+            policy.WithOrigins("http://localhost:8100").AllowAnyHeader().AllowAnyMethod();
         });
 });
 
@@ -39,10 +39,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 Encoding.UTF8.GetBytes(builder.Configuration["AppSettings:Token"]!))
         };
     });
-
-Console.WriteLine(builder.Configuration["WebDav:Username"]);
-Console.WriteLine(builder.Configuration["WebDav:Password"]);
-Console.WriteLine(builder.Configuration["WebDav:BaseUrl"]);
 
 builder.Services.AddHttpClient<IWebDavClient, WebDavClient>(client =>
 {
