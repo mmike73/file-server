@@ -79,7 +79,7 @@ public class AuthService(AppDbContext context, IConfiguration configuration) : I
         return new TokenResponseDto
         {
             AccessToken = CreateToken(user),
-            RefreshToken = (user.RefreshToken is not null) ? user.RefreshToken : await GenerateAndSaveRefreshTokenAsync(user)
+            RefreshToken = (user.RefreshToken is not null && user.RefreshTokenExpiryTime > DateTime.Now) ? user.RefreshToken : await GenerateAndSaveRefreshTokenAsync(user)
         };
     }
 
